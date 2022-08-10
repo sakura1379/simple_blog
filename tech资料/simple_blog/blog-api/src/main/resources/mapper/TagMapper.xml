@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--MyBatis配置文件-->
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Config 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.zlr.blog.dao.mapper.TagMapper">
+
+    <sql id="all">
+        id,avatar,tag_name as tagName
+    </sql>
+    <!-- List<Long> findHotsTagIds(int limit);-->
+<!--    sql语句的意思是在表中查找tag_id，根据tag_id将其聚合在一起，再根据count（*）的数量以递减的顺序排序最后限制输出-->
+    <select id="findHotsTagIds"  parameterType="int" resultType="java.lang.Long">
+        SELECT  tag_id FROM `zlr_article_tag` group by tag_id order by count(*) desc limit #{limit}
+    </select>
+    <!-- List<Tag> findTagsByTagIds(List<Long> tagIds);-->
+<!--    相当于for循环找传进来的一个id集合，每个id通过sql语句找到对应的tag对象-->
+    <select id="findTagsByTagIds" parameterType="list" resultType="com.zlr.blog.dao.pojo.Tag">
+        select id,avatar,tag_name as tagName from zlr_tag
+        where id in
+        <foreach collection="tagIds" item="tagId" separator="," open="(" close=")">
+            #{tagId}
+        </foreach>
+    </select>
+    <!--        List<Tag> findTagsByArticleId(Long articleId);
+    在这个文件中，id代表方法名，parameterType表示输入变量的类型，resultType表示泛型的类型-->
+    <select id="findTagsByArticleId" parameterType="long" resultType="com.zlr.blog.dao.pojo.Tag">
+        select  id,avatar,tag_name as tagName from zlr_tag
+        where id in (select tag_id from zlr_article_tag where article_id=#{articleId})
+    </select>
+</mapper>

@@ -1,0 +1,78 @@
+server:
+  # 端口配置
+  port: 8888
+
+spring:
+  application:
+    name: blog
+    # 数据库数据源配置
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/blog?useSSL=false&u-seUnicode=true&characterEncoding=utf-8
+    username: root
+    password: 201379
+    druid:
+      initial-size: 5
+      min-idle: 5
+      maxActive: 20
+      maxWait: 60000
+      timeBetweenEvictionRunsMillis: 60000
+      minEvictableIdleTimeMillis: 300000
+      validationQuery: SELECT 1 FROM DUAL
+      testWhileIdle: true
+      testOnBorrow: false
+      testOnReturn: false
+      poolPreparedStatements: true
+      maxPoolPreparedStatementPerConnectionSize: 20
+      filter:
+        slf4j:
+          enabled: true
+        wall:
+          enabled: true
+        stat:
+          enabled: true
+      connectionProperties: druid.stat.mergeSql\=true;druid.stat.slowSqlMillis\=5000
+      web-stat-filter:
+        enabled: true
+        url-pattern: "/*"
+        exclusions: "*.js,*.gif,*.jpg,*.bmp,*.png,*.css,*.ico,/druid/*"
+      stat-view-servlet:
+        url-pattern: "/druid/*"
+        reset-enable: false
+        # 数据库监控用户名密码配置
+        login-username: admin
+        login-password: admin
+  # redis配置
+  redis:
+    host: 127.0.0.1
+    port: 6379
+    password:
+    timeout: 3000
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: -1ms
+  servlet:
+    multipart:
+      max-request-size: 20MB
+      max-file-size: 2MB
+
+mybatis-plus:
+  mapper-locations:
+    - classpath:/mapper/*.xml
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      table-prefix: zlr_
+
+jasypt:
+  encryptor:
+    password: zlr_blog_$#@zlr_&^%$#
+
+qiniu:
+  accessKey: CcjZ-SFnohqMqLsArEeNls-KxgEFfG3TuECXZA7p
+  accessSecretKey: dorN6vv2jB-_m80Wu5_ZbTc3GzyKyzfWS6Io7Dr3
