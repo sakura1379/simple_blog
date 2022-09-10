@@ -1,9 +1,11 @@
 package com.zlr.blog.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.zlr.blog.config.RabbitMqConstants;
 import com.zlr.blog.dao.mapper.ArticleMapper;
 import com.zlr.blog.dao.pojo.Article;
+import com.zlr.blog.utils.RabbitMqUtils;
+import com.zlr.blog.vo.ArticleMessage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Async;
@@ -12,7 +14,12 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * @author Zenglr
@@ -26,6 +33,8 @@ public class ThreadService {
 
     @Resource
     private ArticleMapper articleMapper;
+    @Resource
+    private RabbitMqUtils rabbitMqUtils;
 
     @PostConstruct
     public void initViewCount(){
@@ -46,6 +55,7 @@ public class ThreadService {
 
     //期望此操作在线程池执行 不会影响原有的主线程
     @Async("taskExecutor")
+//    @RefreshMysqlMqSender(sender = "ThreadService-updateArticleViewCount")
     public void updateArticleViewCount(ArticleMapper articleMapper, Article article) {
 
         int viewCounts = article.getViewCounts();
@@ -69,6 +79,19 @@ public class ThreadService {
         //定时任务在ViewCountHandler中
 
         //还有一种方式是，redis自增之后，直接发送消息到消息队列中，由消息队列进行消费 来同步数据库，比定时任务要好一些
+//        String messageId = String.valueOf(UUID.randomUUID());
+//        String messageData = "Redis update articleViewCount, refresh mysql data";
+//        String createTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+//        String articleId = String.valueOf(article.getId());
+//        Map<String,Object> map=new HashMap<>();
+//        map.put("messageId",messageId);
+//        map.put("messageData",messageData);
+//        map.put("createTime",createTime);
+//        map.put("article,articleId);
+        ArticleMessage articleMessage = new ArticleMessage();
+        articleMessage.setArticleId(article.getId());
+        // 发送刷新信息
+        rabbitMqUtils.send(RabbitMqConstants.CACHE_QUEUE,articleMessage);
     }
 
 }

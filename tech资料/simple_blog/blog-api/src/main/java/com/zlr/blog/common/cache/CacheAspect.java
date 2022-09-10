@@ -37,7 +37,7 @@ public class CacheAspect {
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
 
-    @Pointcut("@annotation(com.mszlu.blog.common.cache.Cache)")
+    @Pointcut("@annotation(com.zlr.blog.common.cache.Cache)")
     public void pt(){}
 
     @Around("pt()")

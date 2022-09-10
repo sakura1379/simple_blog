@@ -1,5 +1,7 @@
 package com.zlr.blog.service;
 
+import com.baomidou.mybatisplus.extension.service.IService;
+import com.zlr.blog.dao.pojo.Article;
 import com.zlr.blog.vo.Result;
 import com.zlr.blog.vo.params.ArticleParam;
 import com.zlr.blog.vo.params.PageParams;
@@ -11,7 +13,7 @@ import com.zlr.blog.vo.params.PageParams;
  * @Description
  * @create 2022-08-02-下午1:13
  */
-public interface ArticleService {
+public interface ArticleService extends IService<Article> {
     /**
      * 分页查询文章列表
      * @param pageParams
@@ -59,4 +61,30 @@ public interface ArticleService {
      * @return
      */
     Result searchArticle(String search);
+//
+//    /**
+//     * 根据关键词从es中搜索
+//     * @param keywords
+//     * @return
+//     */
+//    Result search(String keywords);
+//
+//    /**
+//     * es更新文章内容
+//     * @return
+//     */
+//    Result refreshEs();
+
+    /**
+     * mysql更新浏览量
+     * @return
+     */
+    Result refreshMysqlView(Long articleId);
+
+    /**
+     * 删除指定前缀的缓存
+     * @param prefix
+     * @return
+     */
+    Result deleteRedisCache(String prefix);
 }

@@ -1,10 +1,14 @@
 package com.zlr.blog.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.google.common.collect.Lists;
+import com.zlr.blog.config.RabbitMqConstants;
 import com.zlr.blog.dao.dos.Archives;
 import com.zlr.blog.dao.mapper.ArticleBodyMapper;
 import com.zlr.blog.dao.mapper.ArticleMapper;
@@ -14,21 +18,24 @@ import com.zlr.blog.dao.pojo.ArticleBody;
 import com.zlr.blog.dao.pojo.ArticleTag;
 import com.zlr.blog.dao.pojo.SysUser;
 import com.zlr.blog.service.*;
+import com.zlr.blog.utils.RabbitMqUtils;
+import com.zlr.blog.utils.SensitiveFilter;
 import com.zlr.blog.utils.UserThreadLocal;
 import com.zlr.blog.vo.*;
 import com.zlr.blog.vo.params.ArticleParam;
 import com.zlr.blog.vo.params.PageParams;
 import lombok.extern.slf4j.Slf4j;
 import org.joda.time.DateTime;
+import org.springframework.amqp.core.AmqpTemplate;
+import org.springframework.amqp.core.Message;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import javax.annotation.Resource;
+import java.io.IOException;
+import java.util.*;
 
 /**
  * @author Zenglr
@@ -39,30 +46,39 @@ import java.util.Map;
  */
 @Service
 @Slf4j
-public class ArticleServiceImpl implements ArticleService {
-    @Autowired
+public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article>  implements ArticleService {
+    @Resource
     ArticleMapper articleMapper;
 
-    @Autowired
+    @Resource
     SysUserService sysUserService;
 
-    @Autowired
+    @Resource
     TagService tagService;
 
-    @Autowired
+    @Resource
     private CategoryService categoryService;
 
-    @Autowired
+    @Resource
     private ThreadService threadService;
 
     @Autowired
     private StringRedisTemplate redisTemplate;
 
-    @Autowired
+    @Resource
     private ArticleBodyMapper articleBodyMapper;
 
-    @Autowired
+    @Resource
     private ArticleTagMapper articleTagMapper;
+
+    @Resource
+    private AmqpTemplate rabbitTemplate;
+
+    @Resource
+    private SensitiveFilter sensitiveFilter;
+
+//    @Resource
+//    private ArticleRepository articleRepository;
 
 //    @Override
 //    public Result listArticle(PageParams pageParams) {
@@ -248,8 +264,8 @@ public class ArticleServiceImpl implements ArticleService {
         if (articleParam.getId() != null){
             article = new Article();
             article.setId(articleParam.getId());
-            article.setTitle(articleParam.getTitle());
-            article.setSummary(articleParam.getSummary());
+            article.setTitle(sensitiveFilter.filter(articleParam.getTitle()));
+            article.setSummary(sensitiveFilter.filter(articleParam.getSummary()));
             article.setCategoryId(Long.parseLong(articleParam.getCategory().getId()));
             articleMapper.updateById(article);
             isEdit = true;
@@ -258,8 +274,8 @@ public class ArticleServiceImpl implements ArticleService {
             article.setAuthorId(sysUser.getId());
             article.setWeight(Article.Article_Common);
             article.setViewCounts(0);
-            article.setTitle(articleParam.getTitle());
-            article.setSummary(articleParam.getSummary());
+            article.setTitle(sensitiveFilter.filter(articleParam.getTitle()));
+            article.setSummary(sensitiveFilter.filter(articleParam.getSummary()));
             article.setCommentCounts(0);
             article.setCreateDate(System.currentTimeMillis());
             article.setCategoryId(Long.parseLong(articleParam.getCategory().getId()));
@@ -287,7 +303,7 @@ public class ArticleServiceImpl implements ArticleService {
         if (isEdit){
             ArticleBody articleBody = new ArticleBody();
             articleBody.setArticleId(article.getId());
-            articleBody.setContent(articleParam.getBody().getContent());
+            articleBody.setContent(sensitiveFilter.filter(articleParam.getBody().getContent()));
             articleBody.setContentHtml(articleParam.getBody().getContentHtml());
             LambdaUpdateWrapper<ArticleBody> updateWrapper = Wrappers.lambdaUpdate();
             updateWrapper.eq(ArticleBody::getArticleId,article.getId());
@@ -295,7 +311,7 @@ public class ArticleServiceImpl implements ArticleService {
         }else {
             ArticleBody articleBody = new ArticleBody();
             articleBody.setArticleId(article.getId());
-            articleBody.setContent(articleParam.getBody().getContent());
+            articleBody.setContent(sensitiveFilter.filter(articleParam.getBody().getContent()));
             articleBody.setContentHtml(articleParam.getBody().getContentHtml());
             articleBodyMapper.insert(articleBody);
 
@@ -306,9 +322,12 @@ public class ArticleServiceImpl implements ArticleService {
         map.put("id",article.getId().toString());
 
         if (isEdit){
-            //发送一条消息给rocketmq 当前文章更新了，更新一下缓存吧
-            ArticleMessage articleMessage = new ArticleMessage();
-            articleMessage.setArticleId(article.getId());
+            //发送一条消息给mq 当前文章更新了，更新一下缓存吧
+
+//            ArticleMessage articleMessage = new ArticleMessage();
+//            articleMessage.setArticleId(article.getId());
+            //是否应该删除所有article有关的缓存？毕竟hot文章之类的可能有它
+            rabbitTemplate.convertAndSend(RabbitMqConstants.REFRESH_REDIS_QUEUE, "Article");
 //            rocketMQTemplate.convertAndSend("blog-update-article",articleMessage);
         }
         return Result.success(map);
@@ -324,5 +343,49 @@ public class ArticleServiceImpl implements ArticleService {
         List<Article> articles = articleMapper.selectList(queryWrapper);
 
         return Result.success(copyList(articles,false,false));
+    }
+
+//    @Override
+//    public Result search(String keywords){
+//        // 对所有索引进行搜索
+//        QueryBuilder queryBuilder = QueryBuilders.queryStringQuery(keywords);
+//
+//        Iterable<Article> listIt =  articleRepository.search(queryBuilder);
+//
+//        //Iterable转list
+//        List<Article> articleList= Lists.newArrayList(listIt);
+//
+//        return Result.success(articleList);
+//    }
+//
+//    @Override
+//    public Result refreshEs(){
+//        articleRepository.deleteAll();
+//        List<Article> list = list();
+//        articleRepository.saveAll(list);
+//        log.info(list.toString());
+//        return Result.success(list);
+//    }
+
+    @Override
+    public Result refreshMysqlView(Long articleId){
+        String viewCount = (String) redisTemplate.opsForHash().get("view_count", String.valueOf(articleId));
+        log.info("refresh mysql viewCount====" + viewCount);
+        Article articleUpdate = new Article();
+        articleUpdate.setViewCounts(Integer.parseInt(viewCount));
+        LambdaUpdateWrapper<Article> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(Article::getId,articleId);
+        articleMapper.update(articleUpdate,updateWrapper);
+        Map<String,String> map = new HashMap<>();
+        map.put("id",articleId.toString());
+        return Result.success(map);
+    }
+
+    @Override
+    public Result deleteRedisCache(String prefix){
+        log.info("deleteRedisCache, prefix=====" + prefix);
+        Set<String> keys = redisTemplate.keys(prefix + "*");
+        Long deleteNum = redisTemplate.delete(keys);
+        return Result.success(deleteNum);
     }
 }

@@ -28,6 +28,8 @@ import javax.servlet.http.HttpServletResponse;
 public class LoginInterceptor implements HandlerInterceptor {
     @Autowired
     private LoginService loginService;
+    // 保存登录信息
+    // 调用时间：Controller方法处理之前
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         //在执行controller方法(Handler)之前进行执行
@@ -70,6 +72,8 @@ public class LoginInterceptor implements HandlerInterceptor {
         return true;
     }
 
+    // 调用时间：DispatcherServlet进行视图的渲染之后
+    // 请求结束，把保存的用户信息清除掉
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
         //如果不删除 ThreadLocal中用完的信息 会有内存泄漏的风险

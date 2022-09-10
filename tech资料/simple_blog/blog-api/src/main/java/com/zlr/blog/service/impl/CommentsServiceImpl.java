@@ -10,6 +10,7 @@ import com.zlr.blog.dao.pojo.Comment;
 import com.zlr.blog.dao.pojo.SysUser;
 import com.zlr.blog.service.CommentsService;
 import com.zlr.blog.service.SysUserService;
+import com.zlr.blog.utils.SensitiveFilter;
 import com.zlr.blog.utils.UserThreadLocal;
 import com.zlr.blog.vo.CommentVo;
 import com.zlr.blog.vo.Result;
@@ -19,6 +20,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,12 +33,15 @@ import java.util.List;
  */
 @Service
 public class CommentsServiceImpl implements CommentsService {
-    @Autowired
+    @Resource
     private CommentMapper commentMapper;
-    @Autowired
+    @Resource
     private SysUserService sysUserService;
-    @Autowired
+    @Resource
     private ArticleMapper articleMapper;
+    @Resource
+    private SensitiveFilter sensitiveFilter;
+
 
     @Override
     public Result commentsByArticleId(Long id) {
@@ -61,7 +66,7 @@ public class CommentsServiceImpl implements CommentsService {
         Comment comment = new Comment();
         comment.setArticleId(commentParam.getArticleId());
         comment.setAuthorId(sysUser.getId());
-        comment.setContent(commentParam.getContent());
+        comment.setContent(sensitiveFilter.filter(commentParam.getContent()));
         comment.setCreateDate(System.currentTimeMillis());
         Long parent = commentParam.getParent();
         if (parent == null || parent == 0) {
